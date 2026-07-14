@@ -105,7 +105,7 @@ python3 scripts/scan_pdf_text.py /path/to/thesis.pdf --low-text-threshold 30 --j
 python3 -m unittest discover -s tests -v
 ```
 
-测试仅使用 Python 标准库，fixtures 同时覆盖材料实验论文和土木理论建模论文，防止检查器退化为计算机论文专用规则。
+测试仅使用 Python 标准库，覆盖 Skill 入口与共享规则结构，并使用材料实验论文和土木理论建模论文 fixtures，防止检查器退化为计算机论文专用规则。推送到 GitHub 后，`.github/workflows/validate.yml` 会自动执行相同测试和 LaTeX 扫描冒烟验证。
 
 ## 局限
 
