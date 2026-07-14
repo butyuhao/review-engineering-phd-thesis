@@ -1,73 +1,192 @@
 # 中文工科博士论文审查 Skill
 
-本 Skill 默认审查完整初稿的学术论证质量：先建立论文自己的贡献和术语映射，再按算法、系统、实验、理论或应用范式核查“问题—方法—证据—结论—边界”。它不要求固定章节结构、贡献数量一一对应或中英文摘要逐句翻译。
+[![Validate skill](https://github.com/butyuhao/review-engineering-phd-thesis/actions/workflows/validate.yml/badge.svg)](https://github.com/butyuhao/review-engineering-phd-thesis/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## 分层结构
+**面向中文工科博士论文完整初稿的一站式自动化审查 Skill。**
+
+把 LaTeX 论文项目或 PDF 交给 Codex，它会自动读取全文、建立核心贡献映射，并系统检查**研究主线、创新贡献、证据链、全文一致性和提交风险**，最后生成带有准确位置、问题证据、修改建议和验证方法的审查报告。
+
+它不只是修改语病或罗列格式问题，更适合已经形成完整初稿、正在准备预审、盲审、答辩或最终提交的博士生，也适合需要批量检查论文初稿的导师和课题组。
+
+## 可以自动检查什么
+
+| 检查大类 | 主要内容 |
+|---|---|
+| 研究框架与创新贡献 | 总体问题是否清楚；各项贡献能否形成“问题—方法—证据—结论—边界”链条；框架图与研究章节是否匹配 |
+| 摘要与全文一致性 | 中英文摘要是否实质对应；题名、摘要、第一章、章首尾和总结中的方法、数字与结论是否一致 |
+| 方法与证据闭环 | 方法设计是否回应研究问题；公式、算法、实验和主图表是否真正支撑对应结论；机制、因果等主张是否越界 |
+| 实验与可复现性 | 数据、划分、参数、基线、指标和统计口径是否完整；比较是否公平；提升幅度和平均范围是否准确 |
+| 术语与学术对象 | 术语、符号、缩写、单位、图表、公式、算法、交叉引用和参考文献是否统一、完整、可追溯 |
+| 提交专项检查 | 按需检查最终 PDF、LaTeX 构建、盲审身份、模板迁移残留、成果与学位材料 |
+
+一次完整初稿审查通常会自动完成四步：
+
+1. 识别论文实际使用的源码、章节、参考文献和当前 PDF；
+2. 提取论文自己的题名、研究问题、贡献、方法、数据、指标和术语；
+3. 按算法、系统、实验、理论或应用范式检查各项贡献所需的证据；
+4. 区分已确认问题、自动候选和暂时无法验证的事项，并按优先级输出报告。
+
+## 为什么需要它
+
+普通的“帮我检查论文”往往有三个问题：
+
+- 只做语言润色，看不出摘要、第一章、研究章和总结之间是否讲的是同一项贡献；
+- 把所有论文强行套进同一种章节模板，忽略算法、系统、实验、理论和应用研究的证据差异；
+- 把正则扫描命中的乱码、标点或 LaTeX 宏直接判成严重错误，产生大量误报。
+
+这个 Skill 会先提取论文自己的研究对象、术语和贡献，再逐项检查：
 
 ```text
-SKILL.md
-shared/
-  core-checklist.md
-  severity-rules.md
-  report-template.md
-  paradigms/
-    algorithm-model.md
-    system-hardware.md
-    experiment-process.md
-    theory-modeling.md
-    application-interdisciplinary.md
-profiles/
-  final-pdf.md
-  latex-build-and-provenance.md
-  blind-review.md
-  migration-audit.md
-  degree-materials.md
-scripts/
-  scan_latex_thesis.py
-  scan_pdf_text.py
+研究问题 → 方法/系统/模型 → 核心证据 → 主要结论 → 适用边界
 ```
 
-默认只加载核心清单、严重度规则、报告模板和与各贡献相关的范式。最终 PDF、LaTeX/Git、盲审、迁移残留和学位材料仅在请求需要时加载 profile，避免低价值工程告警淹没学术问题。
+它允许一项贡献跨章展开，也允许摘要短名与方法全名不同。真正关注的是：**同一研究实体能否被追踪，结论是否有证据支撑，主张是否超出了实验边界。**
 
-## 状态与严重度
+它适用于计算机、人工智能、电子信息、自动化、机械、土木、材料、能源、环境、生物医学工程及交叉应用研究。每项贡献会按实际研究范式检查，而不是按学院名称一刀切。
 
-自动扫描只输出：
+## 一分钟安装
 
-- `candidate`：规则命中，待核实；
-- `not_verified`：工具或输入不足。
+### 让 Codex 安装
 
-核对活动源码、当前编译/PDF、原始结果或权威来源后，才能将 `confirmed` 项定为 P0-P3。扫描候选优先级不等于论文严重度。
+直接把下面这句话发给 Codex：
 
-## LaTeX 扫描
+```text
+请从 https://github.com/butyuhao/review-engineering-phd-thesis 安装这个 Skill。
+```
+
+### 手动安装
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+git clone https://github.com/butyuhao/review-engineering-phd-thesis.git \
+  "${CODEX_HOME:-$HOME/.codex}/skills/review-engineering-phd-thesis"
+```
+
+安装后开启一个新的 Codex 任务即可使用。仓库同时提供了 [Claude Code 入口](claude_code/SKILL.md)，共享同一套审查规则。
+
+## 直接这样使用
+
+把论文项目目录或 PDF 交给 Codex，然后说明你现在所处的阶段。
+
+### 完整初稿审查
+
+```text
+请检查这篇中文工科博士论文。先建立核心贡献映射，再重点检查研究主线、
+方法—证据—结论闭环、中英文摘要、关键数字和主张边界。先报告问题，不要直接大改。
+```
+
+### 提交前终检
+
+```text
+我准备提交了。请检查当前源码和最终 PDF，只报告已经确认的明显问题；
+自动扫描命中但无法确认的内容单独列为候选，不要直接判成 P0/P1。
+```
+
+### 单独检查摘要
+
+```text
+请逐个语义单元核对中英文摘要，并把关键数字追溯到正文主结果表。
+允许拆句和合句，不要求机械逐句对应。
+```
+
+### 检查某一研究章
+
+```text
+请检查第五章提出的问题、方法、实验和结论是否闭环，尤其判断实验是否真正支持摘要中的主张。
+```
+
+### 盲审或模板迁移
+
+```text
+这是盲审版，请按学校匿名要求检查可能泄露身份的位置。
+```
+
+```text
+论文刚迁移到新模板，请专项检查旧作者、旧单位、旧题名和旧研究内容是否残留。
+```
+
+## 你会得到什么
+
+审查报告不会只给一句“整体没问题”，也不会用几十条低价值格式建议淹没真正风险。每个正式问题都会包含：
+
+```text
+[P1] 核心提升幅度在中英文摘要中不一致
+位置：中文摘要第（2）点；英文摘要第（2）点；表 4.3
+证据：中文为 12.6%，英文为 16.2%，主结果表为 12.6%
+影响：核心结果事实矛盾，会削弱摘要可信度
+建议：将英文摘要同步为经主表核实的数值
+验证：全局检索两个数值，并复查第一章和总结
+```
+
+Skill 会严格区分：
+
+- `confirmed`：已经结合源码、PDF、结果表或权威来源核实，可以定为 P0-P3；
+- `candidate`：自动规则命中，仍需人工确认；
+- `not_verified`：当前材料或工具不足，不能擅自下结论；
+- `not_applicable`：不适用于这篇论文或本次任务。
+
+因此，扫描器不会因为一个复杂 LaTeX 宏、低文本页面或 PDF 文本映射异常，就直接宣布论文存在“提交阻断”。
+
+## 按需启用的专项检查
+
+默认审查聚焦学术内容，避免 Git、辅助文件和行政材料喧宾夺主。只有你明确需要时，才会加载相应专项：
+
+| 专项 | 适合什么时候使用 |
+|---|---|
+| 最终 PDF | 提交前检查页面尺寸、裁切、乱码、空白页和主要图表 |
+| LaTeX 与版本溯源 | 检查活动源码、引用、图片路径、构建日志和 Git 版本 |
+| 盲审 | 检查匿名模式及可能的身份泄露 |
+| 模板迁移 | 搜索旧作者、旧单位、旧题名和废弃术语 |
+| 学位材料 | 核对成果状态、作者顺序、专利和学位申请材料 |
+
+## 本地扫描工具
+
+仓库附带两个只使用 Python 标准库的扫描器。它们用于定位线索，不代替学术判断。
+
+### LaTeX 项目
 
 ```bash
 python3 scripts/scan_latex_thesis.py /path/to/thesis --main main.tex
-python3 scripts/scan_latex_thesis.py /path/to/thesis --main main.tex --term '旧术语=新术语'
-python3 scripts/scan_latex_thesis.py /path/to/thesis --main main.tex --check-provenance --json
 ```
 
-扫描器从主文件递归解析 `\input`、`\include`、`\subfile` 和 `\import`，只检查活动源码及活动 bibliography。它支持 `\graphicspath` 和 `\DeclareGraphicsExtensions`；无法展开的宏和条件编译标为 `not_verified`。未跟踪的普通辅助文件只计数，不产生 finding。
+扫描器从主文件递归解析实际可达的 `\input`、`\include`、`\subfile`、`\import` 和 bibliography，不会让未加载的旧章节或旧 `.bib` 制造误报。它也支持 `\graphicspath`；无法展开的宏和条件分支会标为 `not_verified`。
 
-## PDF 扫描
+### 最终 PDF
+
+PDF 扫描需要系统安装 Poppler 的 `pdfinfo` 和 `pdftotext`：
 
 ```bash
 python3 scripts/scan_pdf_text.py /path/to/thesis.pdf
 python3 scripts/scan_pdf_text.py /path/to/thesis.pdf --expected-page-size A4
-python3 scripts/scan_pdf_text.py /path/to/thesis.pdf --sha256 --json
 ```
 
-未提供学校期望尺寸时只报告观测尺寸，不判断 A4 合规性。乱码属于文本层候选，必须视觉确认；低文本页只提供抽查导航。“PDF 可提取文本量估计”不得作为学校、Word、`texcount` 或查重系统字数。
+只有提供学校要求的页面尺寸后，扫描器才判断是否匹配。输出的“PDF 可提取文本量估计”不能替代 Word、`texcount`、查重系统或学校官方字数。
 
-## 测试
+## 设计原则
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+- **论文自己的研究逻辑优先**：不强制固定章节标题或统一结构；
+- **证据类型决定检查标准**：算法、系统、实验、理论和应用研究分别判断；
+- **事实问题优先于审美偏好**：不把句长、连接词或 caption 标点当成重大问题；
+- **自动扫描不冒充学术判断**：所有候选都要回到活动源码和最终 PDF；
+- **临近提交时控制修改风险**：优先解决确认的 P0/P1，不为低价值润色大改全文。
 
-测试覆盖活动依赖图、未加载旧文件、活动 bibliography、`\graphicspath`、宏路径覆盖缺口、PDF 尺寸参数化和候选状态模型。
+## 可靠性与隐私
+
+- 当前测试覆盖 34 个场景，包括未加载旧文件、活动 bibliography、`\graphicspath`、宏路径和 PDF 尺寸判断；
+- 已使用一篇 160 页中文工科博士论文进行完整回归；
+- 本地扫描脚本不会主动上传论文内容；
+- GitHub Actions 会在每次更新后运行测试和扫描器冒烟验证。
 
 ## 局限
 
-- 静态解析无法完整执行 TeX 宏和条件分支；应结合 `.fls/.log/.blg` 与当前 PDF。
-- 文本提取无法确认裁切、超宽、颜色、字号或视觉乱码。
-- 自动工具不能判断创新性、实验公平性、因果性和学科贡献，正式报告必须人工核实证据。
+- 自动工具无法替代导师、领域专家或学校形式审查；
+- 静态解析不能完整执行所有 TeX 宏和条件分支；
+- PDF 文本提取不能单独确认裁切、字号、颜色或视觉乱码；
+- 创新性、实验公平性、机制解释和因果主张仍需结合论文证据人工判断。
+
+如果这个 Skill 帮你在提交前发现了问题，欢迎提交 Issue；如果你希望补充新的工科研究范式或学校检查规则，也欢迎贡献 PR。
+
+## License
+
+[MIT](LICENSE)
