@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -35,12 +36,23 @@ class PdfScannerTests(unittest.TestCase):
             return info if args[0] == "pdfinfo" else text
 
         with patch.object(MODULE.shutil, "which", return_value="/usr/bin/mock"), patch.object(MODULE, "command_output", side_effect=fake_output):
-            findings, summary = MODULE.scan_pdf(Path("mock.pdf"), low_text_threshold=10)
+            with patch.object(MODULE, "file_sha256", return_value="a" * 64):
+                findings, summary = MODULE.scan_pdf(Path("mock.pdf"), low_text_threshold=10)
 
         codes = {item.code for item in findings}
         self.assertTrue(summary["is_a4"])
         self.assertIn("draft-marker", codes)
         self.assertIn("low-text-pages", codes)
+        self.assertEqual(summary["sha256"], "a" * 64)
+
+    def test_file_sha256_is_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sample.pdf"
+            path.write_bytes(b"thesis")
+            first = MODULE.file_sha256(path)
+            second = MODULE.file_sha256(path)
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 64)
 
 
 if __name__ == "__main__":

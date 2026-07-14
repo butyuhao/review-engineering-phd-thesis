@@ -88,7 +88,7 @@ python3 scripts/scan_latex_thesis.py /path/to/thesis --terms-file terms.json --j
 }
 ```
 
-扫描包括：乱码、草稿/占位文本、空 TeX 文件、重复章标题、图片路径、引号、重复或缺失 label、缺失 bib key、未引用主要图表、caption 格式与末尾标点混用、`paragraph` 标点混用、旧术语残留，以及可能混入提交包的辅助文件和 macOS 伪文件。
+扫描包括：乱码、草稿/占位文本、空 TeX 文件、重复章标题、图片路径、引号、重复或缺失 label、缺失 bib key、未引用主要图表、caption 格式与末尾标点混用、`paragraph` 标点混用、旧术语残留，以及可能混入提交包的辅助文件和 macOS 伪文件。对于 Git 项目，扫描器会区分普通临时文件和已被版本库跟踪的污染文件。
 
 ### 最终 PDF
 
@@ -97,7 +97,7 @@ python3 scripts/scan_pdf_text.py /path/to/thesis.pdf
 python3 scripts/scan_pdf_text.py /path/to/thesis.pdf --low-text-threshold 30 --json
 ```
 
-扫描包括：页数与 A4 尺寸、乱码、`??`、草稿标记、低文本页，并给出“中文字符数 + 拉丁/数字词元数”的 Word-like 近似字数。该数字不等于 Word、LaTeX `texcount` 或学校查重系统的官方口径。
+扫描包括：页数与 A4 尺寸、SHA-256、乱码、`??`、草稿标记、低文本页，并给出“中文字符数 + 拉丁/数字词元数”的 Word-like 近似字数。该数字不等于 Word、LaTeX `texcount` 或学校查重系统的官方口径。LaTeX 项目扫描在根目录本身是 Git 工作区时还会记录分支、提交号和 dirty 状态。
 
 ## 测试
 

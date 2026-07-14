@@ -81,6 +81,101 @@ class LatexScannerTests(unittest.TestCase):
         self.assertEqual(len(artifacts), 1)
         self.assertEqual(artifacts[0].severity, "P3")
 
+    def test_latex_draft_option_is_not_treated_as_draft_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "main.tex").write_text(
+                "\\documentclass[draft]{book}\n\\def\\draftfigure{off}\n",
+                encoding="utf-8",
+            )
+            findings, _ = MODULE.scan_project(root)
+        self.assertNotIn("draft-marker", {item.code for item in findings})
+
+    def test_standalone_draft_marker_is_detected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "main.tex").write_text("DRAFT: 尚未定稿\n", encoding="utf-8")
+            findings, _ = MODULE.scan_project(root)
+        self.assertIn("draft-marker", {item.code for item in findings})
+
+    def test_subfigure_labels_do_not_require_individual_references(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "main.tex").write_text(
+                """
+\\begin{figure}
+\\begin{subfigure}{.4\\linewidth}\\caption{子图}\\label{fig:child}\\end{subfigure}
+\\caption{主图}\\label{fig:parent}
+\\end{figure}
+参见图~\\ref{fig:parent}。
+""",
+                encoding="utf-8",
+            )
+            findings, summary = MODULE.scan_project(root)
+        unreferenced = [item for item in findings if item.code == "unreferenced-object"]
+        self.assertFalse(unreferenced)
+        self.assertEqual(summary["floating_objects"], 1)
+
+    def test_git_tracked_artifact_has_higher_priority(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess = __import__("subprocess")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / "main.tex").write_text("正文\n", encoding="utf-8")
+            (root / ".DS_Store").write_bytes(b"metadata")
+            subprocess.run(["git", "-C", str(root), "add", "main.tex", ".DS_Store"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.com",
+                    "commit",
+                    "-qm",
+                    "initial",
+                ],
+                check=True,
+            )
+            findings, summary = MODULE.scan_project(root)
+        tracked = [item for item in findings if item.code == "tracked-project-artifact"]
+        self.assertEqual(summary["tracked_project_artifacts"], 1)
+        self.assertEqual(len(tracked), 1)
+        self.assertEqual(tracked[0].severity, "P2")
+
+    def test_git_provenance_is_reported_only_for_repository_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess = __import__("subprocess")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / "main.tex").write_text("正文\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "main.tex"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.com",
+                    "commit",
+                    "-qm",
+                    "initial",
+                ],
+                check=True,
+            )
+            _, root_summary = MODULE.scan_project(root)
+            child = root / "child"
+            child.mkdir()
+            (child / "chapter.tex").write_text("正文\n", encoding="utf-8")
+            _, child_summary = MODULE.scan_project(child)
+        self.assertEqual(len(root_summary["git"]["head"]), 40)
+        self.assertFalse(root_summary["git"]["dirty"])
+        self.assertIsNone(child_summary["git"])
+
     def test_empty_source_duplicate_chapter_and_missing_graphics_are_detected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

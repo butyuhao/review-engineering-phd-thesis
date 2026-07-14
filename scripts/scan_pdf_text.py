@@ -8,6 +8,7 @@ are mechanical review leads and must be visually confirmed.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -32,6 +33,14 @@ class Finding:
 
 def command_output(args: list[str]) -> str:
     return subprocess.check_output(args, text=True, errors="replace", stderr=subprocess.STDOUT)
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def word_like_count(text: str) -> tuple[int, int, int]:
@@ -120,6 +129,7 @@ def scan_pdf(pdf: Path, low_text_threshold: int = 30) -> tuple[list[Finding], di
     findings.sort(key=lambda item: (order[item.severity], item.page or 0, item.code))
     summary: dict[str, object] = {
         "pdf": str(pdf.resolve()),
+        "sha256": file_sha256(pdf),
         "pages_pdfinfo": declared_pages,
         "pages_extracted": len(pages),
         "page_size": page_size,

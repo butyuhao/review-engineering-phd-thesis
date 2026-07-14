@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
@@ -47,7 +48,7 @@ DRAFT_PATTERNS = {
     "TODO": re.compile(r"\bTODO\b", re.IGNORECASE),
     "FIXME": re.compile(r"\bFIXME\b", re.IGNORECASE),
     "TBD": re.compile(r"\bTBD\b", re.IGNORECASE),
-    "DRAFT": re.compile(r"\bDRAFT\b", re.IGNORECASE),
+    "DRAFT": re.compile(r"(?im)^\s*(?:%\s*)?DRAFT(?:\s*[:：].*)?\s*$"),
     "XXX": re.compile(r"\bXXX\b"),
     "待补": re.compile(r"待补(?:充|写|引用|实验|数据)?"),
     "待定": re.compile(r"待定"),
@@ -126,6 +127,61 @@ def project_artifacts(root: Path) -> list[Path]:
         ):
             found.append(path)
     return sorted(found)
+
+
+def git_tracked_files(root: Path) -> set[str]:
+    """Return Git-tracked paths when root is a repository; otherwise return empty."""
+    state = git_repository_state(root)
+    if state is None:
+        return set()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return set()
+    return {item.decode("utf-8", errors="surrogateescape") for item in result.stdout.split(b"\0") if item}
+
+
+def git_repository_state(root: Path) -> dict[str, object] | None:
+    """Return provenance only when root itself is the Git worktree root."""
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        if Path(top).resolve() != root.resolve():
+            return None
+        head = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        branch = subprocess.run(
+            ["git", "-C", str(root), "branch", "--show-current"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain=v1"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return None
+    return {"branch": branch or "DETACHED", "head": head, "dirty": bool(status.strip())}
 
 
 def extract_braced(text: str, open_brace: int) -> tuple[str, int] | None:
@@ -225,15 +281,25 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
     findings: list[Finding] = []
 
     artifacts = project_artifacts(root)
+    tracked_files = git_tracked_files(root)
+    repository_state = git_repository_state(root)
+    tracked_artifacts = 0
     for path in artifacts:
+        relative = display_path(path, root)
+        tracked = relative in tracked_files
+        tracked_artifacts += int(tracked)
         add(
             findings,
             root,
-            "P3",
-            "project-artifact",
+            "P2" if tracked else "P3",
+            "tracked-project-artifact" if tracked else "project-artifact",
             path,
             1,
-            "发现构建辅助文件或文件系统伪文件；确认其未被跟踪、未混入提交包且不参与正文扫描",
+            (
+                "构建辅助文件或文件系统伪文件已被 Git 跟踪；确认是否应从版本库和提交包中移除"
+                if tracked
+                else "发现构建辅助文件或文件系统伪文件；确认其未混入提交包且不参与正文扫描"
+            ),
         )
 
     raw_sources: dict[Path, str] = {}
@@ -349,7 +415,13 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
         for match in float_re.finditer(text):
             environment, body = match.group(1), match.group(2)
             line = line_number(text, match.start())
-            body_labels = list(label_re.finditer(body))
+            top_level_body = re.sub(
+                r"\\begin\s*\{subfigure\}.*?\\end\s*\{subfigure\}",
+                "",
+                body,
+                flags=re.DOTALL,
+            )
+            body_labels = list(label_re.finditer(top_level_body))
             if "\\caption" not in body:
                 add(findings, root, "P1", "missing-caption", path, line, f"{environment} 环境缺少 caption")
             if not body_labels:
@@ -378,7 +450,16 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
     referenced_keys = {key for key, _, _ in references}
     for key, (path, line, environment) in object_labels.items():
         if key not in referenced_keys:
-            add(findings, root, "P1", "unreferenced-object", path, line, f"{environment} 的 label {key!r} 未被正文交叉引用")
+            appendix_like = "appendix" in path.stem.lower() or "附录" in path.name
+            add(
+                findings,
+                root,
+                "P2" if appendix_like else "P1",
+                "unreferenced-object",
+                path,
+                line,
+                f"{environment} 的 label {key!r} 未被正文交叉引用",
+            )
 
     bib_keys: set[str] = set()
     bib_re = re.compile(r"@(?!comment|string|preamble)\w+\s*\{\s*([^,\s]+)", re.IGNORECASE)
@@ -402,6 +483,7 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
     findings.sort(key=lambda item: (severity_order[item.severity], item.path, item.line, item.code))
     summary: dict[str, object] = {
         "root": str(root),
+        "git": repository_state,
         "tex_files": len(tex_files),
         "bib_files": len(bib_files),
         "labels": len(labels),
@@ -410,6 +492,7 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
         "floating_objects": len(object_labels),
         "chapter_titles": len(chapter_titles),
         "project_artifacts": len(artifacts),
+        "tracked_project_artifacts": tracked_artifacts,
         "findings": dict(Counter(item.severity for item in findings)),
         "notice": "自动扫描仅提供机械风险线索，需结合源码上下文和最终 PDF 人工判断。",
     }
