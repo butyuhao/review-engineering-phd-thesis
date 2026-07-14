@@ -15,17 +15,18 @@ The central method is: **extract the dissertation's local standard first, then t
 
 For a full-thesis, final-submission, or cross-chapter review, read all of these files before judging the dissertation:
 
-- `../shared/checklist.md`
-- `../shared/discipline-adaptation.md`
-- `../shared/severity-rules.md`
-- `../shared/report-template.md`
+- `shared/checklist.md`
+- `shared/discipline-adaptation.md`
+- `shared/severity-rules.md`
+- `shared/report-template.md`
 
 For a narrowly scoped request, read the relevant checklist sections plus severity rules. The files in `shared/` are the single source of truth; do not create a second platform-specific checklist.
 
 ## Workflow
 
 1. Lock the target.
-   - Confirm the active source folder, main file, bibliography, latest PDF, and submission mode.
+   - Confirm the active source folder, Git remote/branch/commit when available, main file, bibliography, latest PDF, and submission mode.
+   - If the remote is inaccessible, state exactly which local copy and commit range were actually inspected.
    - Treat source as the editable truth, the latest compiled PDF as layout truth, and primary result tables/data as numerical truth.
    - Preserve unrelated user changes and do not edit reference theses.
 
@@ -35,13 +36,13 @@ For a narrowly scoped request, read the relevant checklist sections plus severit
 
 3. Classify evidence paradigms.
    - Label each contribution as one or more of: algorithm/model, system/software-hardware, experiment/process, theory/modeling, application/interdisciplinary.
-   - Apply the evidence requirements in `discipline-adaptation.md` contribution by contribution.
+   - Apply the evidence requirements in `shared/discipline-adaptation.md` contribution by contribution.
 
 4. Run mechanical scans when files are available.
 
 ```bash
-python3 ../scripts/scan_latex_thesis.py /path/to/thesis --term '旧术语=新术语'
-python3 ../scripts/scan_pdf_text.py /path/to/final.pdf
+python3 scripts/scan_latex_thesis.py /path/to/thesis --term '旧术语=新术语'
+python3 scripts/scan_pdf_text.py /path/to/final.pdf
 ```
 
    - Inspect source context and PDF pages before accepting a warning.
@@ -60,7 +61,7 @@ python3 ../scripts/scan_pdf_text.py /path/to/final.pdf
    - If no P0/P1 is found, say so while listing unverified items and residual risks.
 
 7. Validate any requested edits.
-   - Rebuild or re-export when possible.
+   - Remove or isolate stale build artifacts, then rebuild or re-export when possible.
    - Re-scan retired terms, references, citations, and affected captions.
    - Visually inspect affected final PDF pages.
 
@@ -75,4 +76,4 @@ python3 ../scripts/scan_pdf_text.py /path/to/final.pdf
 
 ## Output
 
-Use `../shared/report-template.md`. Lead with the submission conclusion and highest-severity findings. Keep advice direct, give exact locations, and provide replacement wording when language changes are needed.
+Use `shared/report-template.md`. Lead with the submission conclusion and highest-severity findings. Keep advice direct, give exact locations, and provide replacement wording when language changes are needed.

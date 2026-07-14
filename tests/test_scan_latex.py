@@ -58,6 +58,54 @@ class LatexScannerTests(unittest.TestCase):
             findings, _ = MODULE.scan_project(root)
         self.assertIn("missing-bibliography", {item.code for item in findings})
 
+    def test_appledouble_source_is_ignored_and_reported_as_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "main.tex").write_text("\\documentclass{book}\\begin{document}正文\\end{document}", encoding="utf-8")
+            (root / "._chapter.tex").write_text("�TODO \\ref{missing}", encoding="utf-8")
+            findings, summary = MODULE.scan_project(root)
+        self.assertEqual(summary["tex_files"], 1)
+        self.assertEqual(summary["project_artifacts"], 1)
+        self.assertIn("project-artifact", {item.code for item in findings})
+        self.assertNotIn("garbled-text", {item.code for item in findings})
+        self.assertNotIn("draft-marker", {item.code for item in findings})
+
+    def test_build_auxiliary_files_are_reported_without_becoming_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "main.tex").write_text("\\documentclass{book}\\begin{document}正文\\end{document}", encoding="utf-8")
+            (root / "main.aux").write_text("\\newlabel{old}{{1}{1}}", encoding="utf-8")
+            findings, summary = MODULE.scan_project(root)
+        self.assertEqual(summary["project_artifacts"], 1)
+        artifacts = [item for item in findings if item.code == "project-artifact"]
+        self.assertEqual(len(artifacts), 1)
+        self.assertEqual(artifacts[0].severity, "P3")
+
+    def test_empty_source_duplicate_chapter_and_missing_graphics_are_detected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "main.tex").write_text(
+                "\\chapter{方法研究}\n\\includegraphics{figures/missing}\n",
+                encoding="utf-8",
+            )
+            (root / "chapter.tex").write_text("\\chapter{方法研究}\n", encoding="utf-8")
+            (root / "empty.tex").write_text("% 只有注释\n", encoding="utf-8")
+            findings, summary = MODULE.scan_project(root)
+        codes = {item.code for item in findings}
+        self.assertEqual(summary["chapter_titles"], 1)
+        self.assertIn("duplicate-chapter-title", codes)
+        self.assertIn("missing-graphics-file", codes)
+        self.assertIn("empty-source", codes)
+
+    def test_existing_graphics_with_implicit_extension_is_found(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "figures").mkdir()
+            (root / "figures" / "result.pdf").write_bytes(b"%PDF-1.4")
+            (root / "main.tex").write_text("\\includegraphics{figures/result}\n", encoding="utf-8")
+            findings, _ = MODULE.scan_project(root)
+        self.assertNotIn("missing-graphics-file", {item.code for item in findings})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,15 +19,15 @@
 
 ```text
 review-engineering-phd-thesis/
+├── SKILL.md
+├── agents/
+│   └── openai.yaml
 ├── README.md
 ├── shared/
 │   ├── checklist.md
 │   ├── discipline-adaptation.md
 │   ├── severity-rules.md
 │   └── report-template.md
-├── codex/
-│   ├── SKILL.md
-│   └── agents/openai.yaml
 ├── claude_code/
 │   └── SKILL.md
 ├── scripts/
@@ -44,7 +44,7 @@ review-engineering-phd-thesis/
 
 ### Codex
 
-将 `codex/` 作为 skill 目录安装或链接到 Codex 的 skills 目录，并保留仓库内的相对路径结构，使 `codex/SKILL.md` 能读取 `../shared/`。
+仓库根目录本身就是标准 Codex skill，可直接安装或链接到 Codex 的 skills 目录。根目录 `SKILL.md` 会按需读取 `shared/` 中的详细规则。
 
 典型触发语句：
 
@@ -59,12 +59,13 @@ review-engineering-phd-thesis/
 ## 推荐工作流
 
 1. 锁定当前论文项目、最新源码和最新编译 PDF，避免误审旧模板或旧版本。
+   若使用 Git，同时记录远程仓库、分支和提交号；远程不可访问时明确本次仅核查的本地副本。
 2. 从论文中提取“局部标准表”：中英文标题、研究主线、问题、贡献、章标题、术语、符号、方法、数据、指标和格式惯例。
 3. 为每个研究贡献判断研究范式；混合论文可为不同章节分别标注。
 4. 运行机械扫描，收集乱码、标签、引用、caption、草稿标记和页面风险。
 5. 按共享 checklist 完成人工逻辑审查和 PDF 视觉抽查。
 6. 按 P0-P3 输出发现；每项包含位置、证据、影响、修改建议和验证方式。
-7. 修改后重新编译、重跑扫描并检查受影响的 PDF 页面。
+7. 修改后清理旧辅助文件，完整编译、重跑扫描并检查受影响的 PDF 页面。
 
 ## 脚本用法
 
@@ -87,7 +88,7 @@ python3 scripts/scan_latex_thesis.py /path/to/thesis --terms-file terms.json --j
 }
 ```
 
-扫描包括：乱码、草稿标记、引号、重复或缺失 label、缺失 bib key、未引用主要图表、caption 格式与末尾标点混用、`paragraph` 标点混用以及旧术语残留。
+扫描包括：乱码、草稿/占位文本、空 TeX 文件、重复章标题、图片路径、引号、重复或缺失 label、缺失 bib key、未引用主要图表、caption 格式与末尾标点混用、`paragraph` 标点混用、旧术语残留，以及可能混入提交包的辅助文件和 macOS 伪文件。
 
 ### 最终 PDF
 

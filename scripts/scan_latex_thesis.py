@@ -29,6 +29,20 @@ SKIP_DIRS = {
     "reference_papers",
 }
 
+PROJECT_ARTIFACT_NAMES = {".DS_Store"}
+PROJECT_ARTIFACT_SUFFIXES = (
+    ".aux",
+    ".blg",
+    ".fdb_latexmk",
+    ".fls",
+    ".lof",
+    ".log",
+    ".lot",
+    ".out",
+    ".synctex.gz",
+    ".toc",
+)
+
 DRAFT_PATTERNS = {
     "TODO": re.compile(r"\bTODO\b", re.IGNORECASE),
     "FIXME": re.compile(r"\bFIXME\b", re.IGNORECASE),
@@ -37,6 +51,7 @@ DRAFT_PATTERNS = {
     "XXX": re.compile(r"\bXXX\b"),
     "待补": re.compile(r"待补(?:充|写|引用|实验|数据)?"),
     "待定": re.compile(r"待定"),
+    "占位文本": re.compile(r"(?:这里写|此处(?:填写|补充|插入)|待完善)"),
 }
 
 GARBLED_PATTERNS = {
@@ -89,7 +104,27 @@ def source_files(root: Path, suffix: str) -> list[Path]:
         relative_parts = path.relative_to(root).parts
         if any(part in SKIP_DIRS or part.startswith(".") for part in relative_parts[:-1]):
             continue
+        if path.name.startswith("._"):
+            continue
         found.append(path)
+    return sorted(found)
+
+
+def project_artifacts(root: Path) -> list[Path]:
+    """Return common generated or filesystem artifacts outside skipped directories."""
+    found: list[Path] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative_parts = path.relative_to(root).parts
+        if any(part in SKIP_DIRS or part.startswith(".") for part in relative_parts[:-1]):
+            continue
+        if (
+            path.name.startswith("._")
+            or path.name in PROJECT_ARTIFACT_NAMES
+            or path.name.endswith(PROJECT_ARTIFACT_SUFFIXES)
+        ):
+            found.append(path)
     return sorted(found)
 
 
@@ -169,12 +204,37 @@ def caption_plain_end(caption: str) -> str:
     return plain[-1] if plain else ""
 
 
+def graphics_candidates(root: Path, tex_path: Path, raw_target: str) -> list[Path]:
+    target = Path(raw_target.strip())
+    bases = [target] if target.is_absolute() else [tex_path.parent / target, root / target]
+    extensions = ("", ".pdf", ".png", ".jpg", ".jpeg", ".eps", ".svg")
+    candidates: list[Path] = []
+    for base in bases:
+        if base.suffix:
+            candidates.append(base)
+        else:
+            candidates.extend(Path(f"{base}{extension}") for extension in extensions)
+    return candidates
+
+
 def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) -> tuple[list[Finding], dict[str, object]]:
     root = root.resolve()
     term_pairs = term_pairs or []
     tex_files = source_files(root, ".tex")
     bib_files = source_files(root, ".bib")
     findings: list[Finding] = []
+
+    artifacts = project_artifacts(root)
+    for path in artifacts:
+        add(
+            findings,
+            root,
+            "P3",
+            "project-artifact",
+            path,
+            1,
+            "发现构建辅助文件或文件系统伪文件；确认其未被跟踪、未混入提交包且不参与正文扫描",
+        )
 
     raw_sources: dict[Path, str] = {}
     sources: dict[Path, str] = {}
@@ -187,6 +247,7 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
     references: list[tuple[str, Path, int]] = []
     citations: list[tuple[str, Path, int]] = []
     object_labels: dict[str, tuple[Path, int, str]] = {}
+    chapter_titles: dict[str, list[tuple[Path, int]]] = defaultdict(list)
     caption_endings = Counter()
     paragraph_endings = Counter()
 
@@ -198,6 +259,8 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
     )
     caption_re = re.compile(r"\\caption(?:\s*\[[^\]]*\])?\s*(\{)")
     paragraph_re = re.compile(r"\\paragraph\*?\s*\{([^{}]+)\}")
+    chapter_re = re.compile(r"\\chapter\*?\s*\{([^{}]+)\}")
+    graphics_re = re.compile(r"\\includegraphics\*?\s*(?:\[[^\]]*\]\s*)?\{([^{}]+)\}")
     float_re = re.compile(
         r"\\begin\s*\{(figure\*?|table\*?|algorithm\*?)\}(.*?)"
         r"\\end\s*\{\1\}",
@@ -206,6 +269,24 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
 
     for path, text in sources.items():
         raw = raw_sources[path]
+
+        if not text.strip():
+            add(findings, root, "P1", "empty-source", path, 1, "TeX 文件除注释和空白外没有有效内容，确认是否仍被主文件加载")
+
+        for match in chapter_re.finditer(text):
+            title = re.sub(r"\s+", " ", match.group(1)).strip()
+            if title:
+                chapter_titles[title].append((path, line_number(text, match.start())))
+
+        for match in graphics_re.finditer(text):
+            target = match.group(1).strip()
+            if not target or any(token in target for token in ("\\", "#")):
+                continue
+            line = line_number(text, match.start())
+            if Path(target).is_absolute():
+                add(findings, root, "P1", "absolute-graphics-path", path, line, f"图片使用绝对路径 {target!r}，在干净副本或他人环境中不可移植")
+            if not any(candidate.is_file() for candidate in graphics_candidates(root, path, target)):
+                add(findings, root, "P1", "missing-graphics-file", path, line, f"未找到 includegraphics 指向的文件 {target!r}；检查路径、扩展名和文件名大小写")
 
         for token, description in GARBLED_PATTERNS.items():
             start = 0
@@ -283,6 +364,12 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
             locations = ", ".join(f"{display_path(path, root)}:{line}" for path, line in occurrences)
             add(findings, root, "P0", "duplicate-label", first_path, first_line, f"label {key!r} 重复：{locations}")
 
+    for title, occurrences in chapter_titles.items():
+        if len(occurrences) > 1:
+            first_path, first_line = occurrences[0]
+            locations = ", ".join(f"{display_path(path, root)}:{line}" for path, line in occurrences)
+            add(findings, root, "P1", "duplicate-chapter-title", first_path, first_line, f"章标题 {title!r} 被重复声明：{locations}")
+
     label_keys = set(labels)
     for key, path, line in references:
         if key and key not in label_keys:
@@ -321,6 +408,8 @@ def scan_project(root: Path, term_pairs: list[tuple[str, str]] | None = None) ->
         "references": len(references),
         "citations": len(citations),
         "floating_objects": len(object_labels),
+        "chapter_titles": len(chapter_titles),
+        "project_artifacts": len(artifacts),
         "findings": dict(Counter(item.severity for item in findings)),
         "notice": "自动扫描仅提供机械风险线索，需结合源码上下文和最终 PDF 人工判断。",
     }
