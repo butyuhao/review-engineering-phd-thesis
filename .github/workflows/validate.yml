@@ -18,4 +18,4 @@ jobs:
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Smoke-test LaTeX scanner
-        run: python3 scripts/scan_latex_thesis.py tests/fixtures/materials --fail-on P0
+        run: python3 scripts/scan_latex_thesis.py tests/fixtures/materials --main main.tex --fail-on-priority high
